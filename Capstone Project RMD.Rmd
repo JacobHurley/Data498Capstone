@@ -1,0 +1,74 @@
+---
+title: "Capstone Project"
+author: "Jacob Hurley, Sofia Gray, Trevor Hoshiwara"
+date: "04/30/2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(1)
+```
+
+```{r}
+############################# Data Parsing #############################
+
+data = read.csv(file='adult.data', na.strings = " ?")
+data$Target[data$Target == " <=50K"] = 0
+data$Target[data$Target == " >50K"] = 1
+data$Target = as.integer(data$Target)
+df = data.frame(data)
+df = df[-4] # Remove Education Categorical Variable (Collinearity)
+df = na.omit(df) # Exclude rows with missing records
+n = nrow(df) # Number of observations
+p = length(df) # Number of predictors
+names(df)
+```
+
+```{r}
+############################# Forward Selection #############################
+
+library(leaps)
+train = sample(n, 0.8*n, replace = FALSE) # Training indices
+par(mfrow = c(4, 5), mar=c(1,1,1,1))
+
+# For i = 1:20, find the forward selection model with i variables:
+for(i in c(1:20)){
+  regfit.full = regsubsets(as.factor(Target) ~ ., data=df, subset=train, nvmax=i, method = "forward")
+  reg.summary = summary(regfit.full)
+  plot (reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+}
+
+#(unfinished...)
+
+```
+
+```{r}
+############################# LASSO Selection #############################
+
+# Split the data into test and train sets:
+x = model.matrix(Target ~ ., df)[, -1]
+y = df$Target
+train = sample (1: nrow(x), nrow(x) / 2)
+test = -train
+y.test = y[train]
+
+# 
+library(glmnet)
+grid = 10^seq(10, -2, length = 100)
+lasso.mod = glmnet(x[train,], y[train], alpha = 1, family="binomial")
+plot(lasso.mod)
+
+cv.out = cv.glmnet(x[train,], y[train], alpha = 1)
+plot(cv.out)
+bestlam = cv.out$lambda.min # Store the lambda which minimizes error
+lasso.pred = predict(lasso.mod, s = bestlam, newx = x[test,], type="response")
+preds = rep(0,length(lasso.pred))
+preds[lasso.pred >= 0.5] = 1
+mean(preds == y.test) # This sucks. Why does this suck, lasso is supposed to be awesome
+```
+
+
