@@ -20,8 +20,19 @@ data = read.csv(file='adult.data', na.strings = " ?")
 data$Target[data$Target == " <=50K"] = 0
 data$Target[data$Target == " >50K"] = 1
 data$Target = as.integer(data$Target)
+
+# Change categorical variables to factors:
+data$Workclass = as.factor(data$Workclass)
+data$Marital.status = as.factor(data$Marital.status)
+data$Occupation = as.factor(data$Occupation)
+data$Relationship = as.factor(data$Relationship)
+data$Race = as.factor(data$Race)
+data$Sex = as.factor(data$Sex)
+data$Native_country = as.factor(data$Native_country)
+
 df = data.frame(data)
 df = df[-4] # Remove Education Categorical Variable (Collinearity)
+df = df[-13] # Remove Country Categorical Variable (> 32 Factors)
 df = na.omit(df) # Exclude rows with missing records
 n = nrow(df) # Number of observations
 p = length(df) # Number of predictors
@@ -77,7 +88,9 @@ mean(preds == y.test) # This sucks. Why does this suck, lasso is supposed to be 
 library(tree)
 library(MASS)
 library(caret)
-set.seed(1)
+set.seed(2)
+
+###### Simple Classification:
 
 # Sample K unique sets of equal size for K-fold CV:
 K = 5
@@ -103,31 +116,33 @@ for(i in 1:K){
   accuracies[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
 }
 cat("K-Fold CV Accuracy: ", mean(accuracies))
+plot(tree.fit)
+text(tree.fit, pretty = 0, cex=0.6)
 
 
-### Pruning --> Results in the same tree as the one above:
-# train <- sample(1:n, n*0.8)
-# tet = TreeDF$Y[-train]
-# tree.fit = tree(Y ~ ., TreeDF, subset = train)
-# tree.pred = predict(tree.fit, TreeDF[-train,], type="class")
-# t = table(tree.pred, tet)
-# vals = as.numeric(t)
-# cat("Original Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
-# 
-# pruned.fit = cv.tree(tree.fit, FUN = prune.misclass)
-# par (mfrow = c(1, 2))
-# plot(pruned.fit$size , pruned.fit$dev, type = "b")
-# plot(pruned.fit$k, pruned.fit$dev, type = "b")
-# pruned.fit$size
-# pruned.fit$dev
-# prune.t <- prune.misclass(tree.fit, best = 5)
-# plot(prune.t)
-# text(prune.t, pretty = 0)
-# 
-# tree.pred = predict(prune.t, TreeDF[-train,], type="class")
-# t = table(tree.pred, tet)
-# vals = as.numeric(t)
-# cat("Pruned Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
+###### Pruning --> Yields no improvement. Nice visuals though:
+train <- sample(1:n, n*0.8)
+tet = TreeDF$Y[-train]
+tree.fit = tree(Y ~ ., TreeDF, subset = train)
+tree.pred = predict(tree.fit, TreeDF[-train,], type="class")
+t = table(tree.pred, tet)
+vals = as.numeric(t)
+cat("Original Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
+
+pruned.fit = cv.tree(tree.fit, FUN = prune.misclass)
+par (mfrow = c(1, 2))
+plot(pruned.fit$size , pruned.fit$dev, type = "b")
+plot(pruned.fit$k, pruned.fit$dev, type = "b")
+pruned.fit$size
+pruned.fit$dev
+prune.t = prune.misclass(tree.fit, best = 5)
+plot(prune.t)
+text(prune.t, pretty = 0, cex=0.7)
+
+tree.pred = predict(prune.t, TreeDF[-train,], type="class")
+t = table(tree.pred, tet)
+vals = as.numeric(t)
+cat("Pruned Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
 ```
 
 
