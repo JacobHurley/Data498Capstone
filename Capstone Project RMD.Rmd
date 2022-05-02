@@ -71,4 +71,64 @@ preds[lasso.pred >= 0.5] = 1
 mean(preds == y.test) # This sucks. Why does this suck, lasso is supposed to be awesome
 ```
 
+```{r}
+############################# Classification Tree #############################
+
+library(tree)
+library(MASS)
+library(caret)
+set.seed(1)
+
+# Sample K unique sets of equal size for K-fold CV:
+K = 5
+folds = createFolds(1:n,k=K)
+
+accuracies = rep(0,K)
+X = df[1:length(df)-1]
+Y = factor(ifelse(df$Target == 0, "No", " Yes "))
+TreeDF = data.frame(X,Y)
+for(i in 1:K){
+  
+  # Split the data into train and test sets:
+  test = folds[[i]]
+  train = -test
+  y.test = TreeDF$Y[test]
+  x.test = TreeDF[test,]
+
+  # Fit the tree decision model:
+  tree.fit = tree(Y ~ ., TreeDF, subset = train)
+  tree.pred = predict(tree.fit, x.test, type="class")
+  t = table(tree.pred,y.test)
+  vals = as.numeric(t)
+  accuracies[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
+}
+cat("K-Fold CV Accuracy: ", mean(accuracies))
+
+
+### Pruning --> Results in the same tree as the one above:
+# train <- sample(1:n, n*0.8)
+# tet = TreeDF$Y[-train]
+# tree.fit = tree(Y ~ ., TreeDF, subset = train)
+# tree.pred = predict(tree.fit, TreeDF[-train,], type="class")
+# t = table(tree.pred, tet)
+# vals = as.numeric(t)
+# cat("Original Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
+# 
+# pruned.fit = cv.tree(tree.fit, FUN = prune.misclass)
+# par (mfrow = c(1, 2))
+# plot(pruned.fit$size , pruned.fit$dev, type = "b")
+# plot(pruned.fit$k, pruned.fit$dev, type = "b")
+# pruned.fit$size
+# pruned.fit$dev
+# prune.t <- prune.misclass(tree.fit, best = 5)
+# plot(prune.t)
+# text(prune.t, pretty = 0)
+# 
+# tree.pred = predict(prune.t, TreeDF[-train,], type="class")
+# t = table(tree.pred, tet)
+# vals = as.numeric(t)
+# cat("Pruned Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
+```
+
+
 
