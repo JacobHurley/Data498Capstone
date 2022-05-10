@@ -40,23 +40,6 @@ p
 names(df)
 ```
 
-```{r}
-############################# Forward Selection #############################
-
-library(leaps)
-train = sample(n, 0.8*n, replace = FALSE) # Training indices
-par(mfrow = c(4, 5), mar=c(1,1,1,1))
-
-# For i = 1:20, find the forward selection model with i variables:
-for(i in c(1:20)){
-  regfit.full = regsubsets(as.factor(Target) ~ ., data=df, subset=train, nvmax=i, method = "forward")
-  reg.summary = summary(regfit.full)
-  plot (reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
-}
-
-#(unfinished...)
-
-```
 
 ```{r}
 ############################# LASSO Selection #############################
@@ -99,6 +82,7 @@ K = 5
 folds = createFolds(1:n,k=K)
 
 accuracies = rep(0,K)
+accuraciesP = rep(0,K)
 X = df[1:length(df)-1]
 Y = factor(ifelse(df$Target == 0, "No", " Yes "))
 TreeDF = data.frame(X,Y)
@@ -116,47 +100,41 @@ for(i in 1:K){
   t = table(tree.pred,y.test)
   vals = as.numeric(t)
   accuracies[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
+  
+  
+  ###### Pruning --> Yields no improvement. Nice visuals though:
+  pruned.fit = cv.tree(tree.fit, FUN = prune.misclass)
+  prune.t = prune.misclass(tree.fit, best = 5)
+  tree.pred = predict(prune.t, x.test, type="class")
+  t = table(tree.pred, y.test)
+  vals = as.numeric(t)
+  accuraciesP[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
+  
+  
 }
 cat("K-Fold CV Accuracy: ", mean(accuracies))
+cat("K-Fold CV Accuracy Pruned: ", mean(accuraciesP))
 
 #jpeg(file="Original_Tree.jpeg")
 plot(tree.fit)
-text(tree.fit, pretty = 0, cex=0.6)
+text(tree.fit, pretty = 0, cex=0.8)
 #dev.off()
 
-
-###### Pruning --> Yields no improvement. Nice visuals though:
-train <- sample(1:n, n*0.8)
-tet = TreeDF$Y[-train]
-tree.fit = tree(Y ~ ., TreeDF, subset = train)
-tree.pred = predict(tree.fit, TreeDF[-train,], type="class")
-t = table(tree.pred, tet)
-vals = as.numeric(t)
-cat("Original Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
-
-pruned.fit = cv.tree(tree.fit, FUN = prune.misclass)
-#jpeg(file="Prune_Err.jpeg")
 plot(pruned.fit$size , pruned.fit$dev, type = "b", xaxt = "n", xlab = "Number of Leaves", ylab = "CV Errors", main = "Error vs. Tree Size", col = "purple")
 axis(side=1, at=seq(0,8,2))
-#dev.off()
+# #dev.off()
 plot(pruned.fit$k, pruned.fit$dev, type = "b")
-pruned.fit$size
-pruned.fit$dev
-prune.t = prune.misclass(tree.fit, best = 5)
-#jpeg(file="Pruned_Tree.jpeg")
+
+# #jpeg(file="Pruned_Tree.jpeg")
 plot(prune.t)
 text(prune.t, pretty = 0, cex=1.4)
-#dev.off()
-
-tree.pred = predict(prune.t, TreeDF[-train,], type="class")
-t = table(tree.pred, tet)
-vals = as.numeric(t)
-cat("Pruned Accuracy: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
+# #dev.off()
 ```
 
 ```{r}
 ############################# Random Forest #############################
 
+library(randomForest)
 set.seed(2)
 X = df[1:length(df)-1]
 Y = factor(ifelse(df$Target == 0, "No", " Yes "))
@@ -164,6 +142,7 @@ TreeDF = data.frame(X,Y)
 
 K = 5
 folds = createFolds(1:nrow(TreeDF),k=K)
+
 
 accuracies = rep(0,K)
 for(i in 1:K){
@@ -175,13 +154,20 @@ for(i in 1:K){
   x.test = TreeDF[test,]
 
   # Fit the tree decision model:
-  tree.fit = randomForest(Y ~ ., data = TreeDF, subset = train, mtry = 6, importance = TRUE)
+  tree.fit = randomForest(Y ~ ., data = TreeDF, subset = train, mtry = 2, importance = TRUE)
   tree.pred = predict(tree.fit, newdata = x.test)
   t = table(tree.pred,y.test)
   vals = as.numeric(t)
   accuracies[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
 }
 cat("K-Fold CV Accuracy: ", mean(accuracies))
+
+#mtry = 5 --> 85.68%
+#mtry = 4 --> 85.93%
+#mtry = 3 --> 86.33% 
+#mtry = 2 --> 86.37% ***
+#mtry = 1 --> 85.61%
+
 
 ### Example with plots, wihout cross validation:
 # train = sample(1:nrow(TreeDF), nrow(TreeDF)*0.8)
