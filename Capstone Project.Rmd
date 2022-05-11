@@ -1,0 +1,78 @@
+---
+title: "Capstone Project"
+author: "Sofia Gray"
+date: "4/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(corrplot)
+
+adult = read.csv("adult.csv")
+
+summary(adult)
+
+adult[] <- lapply(adult, as.numeric)
+
+corrplot(cor(adult[,-16]), method="square")
+```
+
+```{r}
+attach(adult)
+adult.log = glm(Target ~ Age + Workclass + fnlwgt + Education + EdNum + MaritalStatus + Occupation + Relationship + Race + Sex + CapitalGain + CapitalLoss + Hours + Country, data = adult, family = binomial)
+
+summary(adult.log)
+```
+
+```{r}
+# Model Accuracy using predicted outcomes vs actual outcomes
+prob = predict(adult.log, type='response')
+pred = rep("0", length(prob))
+pred[prob > 0.5] = "1"
+table(pred, Target)
+
+model.ac = (23300+3565) / (23300 + 1420 + 4276 + 3565)
+model.ac
+```
+
+```{r}
+# 10 Fold Cross Validation
+library(caret)
+
+train = trainControl(method="cv", number=10)
+model = train(Target ~., data=adult, trControl=train, method="glm")
+
+print(model)
+```
+
+```{r}
+# Removing statistically insignificant variables i.e. greater than 0.05 (workclass, country)
+
+adult.log2 = glm(Target ~ Age + fnlwgt + Education + EdNum + MaritalStatus + Occupation + Relationship + Race + Sex + CapitalGain + CapitalLoss + Hours, data = adult, family = binomial)
+
+summary(adult.log2)
+```
+
+```{r}
+prob2 = predict(adult.log2, type='response')
+pred2 = rep("0", length(prob2))
+pred2[prob2 > 0.5] = "1"
+table(pred2, Target)
+
+model.ac2 = (23290 + 3547) / (23290  + 1430 + 4294 + 3547)
+model.ac2
+```
+
+```{r}
+train2 = trainControl(method="cv", number=10)
+model2 = train(Target ~., data=adult, trControl=train2, method="glm")
+
+print(model2)
+```
+```{r}
+
+```

@@ -20,31 +20,26 @@ data = read.csv(file='adult.data', na.strings = " ?")
 data$Target[data$Target == " <=50K"] = 0
 data$Target[data$Target == " >50K"] = 1
 data$Target = as.integer(data$Target)
+
+# Change categorical variables to factors:
+data$Workclass = as.factor(data$Workclass)
+data$Marital.status = as.factor(data$Marital.status)
+data$Occupation = as.factor(data$Occupation)
+data$Relationship = as.factor(data$Relationship)
+data$Race = as.factor(data$Race)
+data$Sex = as.factor(data$Sex)
+data$Native_country = as.factor(data$Native_country)
+
 df = data.frame(data)
 df = df[-4] # Remove Education Categorical Variable (Collinearity)
+df = df[-13] # Remove Country Categorical Variable (> 32 Factors)
 df = na.omit(df) # Exclude rows with missing records
 n = nrow(df) # Number of observations
 p = length(df) # Number of predictors
+p
 names(df)
 ```
 
-```{r}
-############################# Forward Selection #############################
-
-library(leaps)
-train = sample(n, 0.8*n, replace = FALSE) # Training indices
-par(mfrow = c(4, 5), mar=c(1,1,1,1))
-
-# For i = 1:20, find the forward selection model with i variables:
-for(i in c(1:20)){
-  regfit.full = regsubsets(as.factor(Target) ~ ., data=df, subset=train, nvmax=i, method = "forward")
-  reg.summary = summary(regfit.full)
-  plot (reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
-}
-
-#(unfinished...)
-
-```
 
 ```{r}
 ############################# LASSO Selection #############################
@@ -70,5 +65,130 @@ preds = rep(0,length(lasso.pred))
 preds[lasso.pred >= 0.5] = 1
 mean(preds == y.test) # This sucks. Why does this suck, lasso is supposed to be awesome
 ```
+
+```{r}
+############################# Classification Tree #############################
+
+library(tree)
+library(rpart.plot)
+library(MASS)
+library(caret)
+set.seed(2)
+
+###### Simple Classification:
+
+# Sample K unique sets of equal size for K-fold CV:
+K = 5
+folds = createFolds(1:n,k=K)
+
+accuracies = rep(0,K)
+accuraciesP = rep(0,K)
+X = df[1:length(df)-1]
+Y = factor(ifelse(df$Target == 0, "No", " Yes "))
+TreeDF = data.frame(X,Y)
+for(i in 1:K){
+  
+  # Split the data into train and test sets:
+  test = folds[[i]]
+  train = -test
+  y.test = TreeDF$Y[test]
+  x.test = TreeDF[test,]
+
+  # Fit the tree decision model:
+  tree.fit = tree(Y ~ ., TreeDF, subset = train)
+  tree.pred = predict(tree.fit, x.test, type="class")
+  t = table(tree.pred,y.test)
+  vals = as.numeric(t)
+  accuracies[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
+  
+  
+  ###### Pruning --> Yields no improvement. Nice visuals though:
+  pruned.fit = cv.tree(tree.fit, FUN = prune.misclass)
+  prune.t = prune.misclass(tree.fit, best = 5)
+  tree.pred = predict(prune.t, x.test, type="class")
+  t = table(tree.pred, y.test)
+  vals = as.numeric(t)
+  accuraciesP[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
+  
+  
+}
+cat("K-Fold CV Accuracy: ", mean(accuracies))
+cat("K-Fold CV Accuracy Pruned: ", mean(accuraciesP))
+
+#jpeg(file="Original_Tree.jpeg")
+plot(tree.fit)
+text(tree.fit, pretty = 0, cex=0.8)
+#dev.off()
+
+plot(pruned.fit$size , pruned.fit$dev, type = "b", xaxt = "n", xlab = "Number of Leaves", ylab = "CV Errors", main = "Error vs. Tree Size", col = "purple")
+axis(side=1, at=seq(0,8,2))
+# #dev.off()
+plot(pruned.fit$k, pruned.fit$dev, type = "b")
+
+# #jpeg(file="Pruned_Tree.jpeg")
+plot(prune.t)
+text(prune.t, pretty = 0, cex=1.4)
+# #dev.off()
+```
+
+```{r}
+############################# Random Forest #############################
+
+library(randomForest)
+set.seed(2)
+X = df[1:length(df)-1]
+Y = factor(ifelse(df$Target == 0, "No", " Yes "))
+TreeDF = data.frame(X,Y)
+
+K = 5
+folds = createFolds(1:nrow(TreeDF),k=K)
+
+
+accuracies = rep(0,K)
+for(i in 1:K){
+  
+  # Split the data into train and test sets:
+  test = folds[[i]]
+  train = -test
+  y.test = TreeDF$Y[test]
+  x.test = TreeDF[test,]
+
+  # Fit the tree decision model:
+  tree.fit = randomForest(Y ~ ., data = TreeDF, subset = train, mtry = 2, importance = TRUE)
+  tree.pred = predict(tree.fit, newdata = x.test)
+  t = table(tree.pred,y.test)
+  vals = as.numeric(t)
+  accuracies[i] = (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4])
+}
+cat("K-Fold CV Accuracy: ", mean(accuracies))
+
+#mtry = 5 --> 85.68%
+#mtry = 4 --> 85.93%
+#mtry = 3 --> 86.33% 
+#mtry = 2 --> 86.37% ***
+#mtry = 1 --> 85.61%
+
+
+### Example with plots, wihout cross validation:
+# train = sample(1:nrow(TreeDF), nrow(TreeDF)*0.8)
+# test = -train
+# tries = 6
+# rf = randomForest(Y ~ ., data = TreeDF, subset = train, mtry = tries, importance = TRUE)
+# 
+# yhat.rf = predict(rf, newdata = TreeDF[test,])
+# 
+# t = table(yhat.rf,TreeDF$Y[test])
+# vals = as.numeric(t)
+# cat("Random FOrest Accuracy1: ", (vals[1]+vals[4])/(vals[1]+vals[2]+vals[3]+vals[4]))
+# 
+# 
+# plot(yhat.rf, TreeDF$Y[test])
+# abline(0,1)
+# mean((yhat.rf - TreeDF$Y[test])^2)
+# importance(rf)
+# varImpPlot(rf)
+```
+
+
 
 
